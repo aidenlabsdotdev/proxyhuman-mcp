@@ -37,8 +37,10 @@ const DEFAULT_KEY = resolveApiKey();
 interface Live {
   session: BrowserSession;
   apiUrl: string;
-  outcome: 'human_done' | 'timeout' | 'disconnected' | null;
-  completion: Promise<'human_done' | 'disconnected'>;
+  prompt: string | null;
+  createdAt: number;
+  /** Resolves when the session reaches any terminal state. */
+  terminal: Promise<void>;
 }
 
 const sessions = new Map<string, Live>();
@@ -89,28 +91,25 @@ server.registerTool('open_browser_handoff_link', {
 
   let session: BrowserSession;
   try {
-    session = await connectBrowser({ apiKey, cdpTarget, apiUrl });
+    session = await connectBrowser({ apiKey, cdpTarget, apiUrl, prompt: prompt ?? null });
   } catch (e) {
     return err(`failed to start session: ${e}`);
   }
 
-  const completion = new Promise<'human_done' | 'disconnected'>((resolve) => {
-    session.onComplete(() => resolve('human_done'));
-    session.onDisconnect(() => resolve('disconnected'));
+  // Resolves the first time we hit a terminal state. The session itself
+  // owns the state machine; we just observe it.
+  const terminal = new Promise<void>((resolve) => {
+    session.onComplete(() => resolve());
   });
 
-  sessions.set(session.sessionId, { session, apiUrl, outcome: null, completion });
-
-  // When completion resolves, stash the outcome so peek/wait see it.
-  completion.then((o) => {
-    const s = sessions.get(session.sessionId);
-    if (s && s.outcome === null) s.outcome = o;
+  sessions.set(session.sessionId, {
+    session, apiUrl, prompt: prompt ?? null, createdAt: Date.now(), terminal,
   });
 
   return ok({
     sessionId: session.sessionId,
     viewerUrl: session.viewerUrl,
-    status: 'waiting',
+    state: session.state,
     prompt: prompt ?? null,
   });
 });
@@ -134,18 +133,72 @@ server.registerTool('wait_for_human_handback', {
   if (!live) return err(`session ${sessionId} not found`);
 
   const timeoutMs = (timeoutSec ?? 600) * 1000;
-  const winner = await Promise.race([
-    live.completion,
-    new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), timeoutMs)),
+  let timedOut = false;
+  await Promise.race([
+    live.terminal,
+    new Promise<void>((resolve) => setTimeout(() => { timedOut = true; resolve(); }, timeoutMs)),
   ]);
-  if (live.outcome === null) live.outcome = winner;
 
   const log = await fetchActions(live.apiUrl, sessionId);
   return ok({
-    outcome: live.outcome,
     sessionId,
+    state: live.session.state,
+    outcome: live.session.outcome ?? (timedOut ? { type: 'timeout' } : null),
+    viewerCount: live.session.viewerCount,
     currentUrl: log.currentUrl,
     actions: log.actions,
+  });
+});
+
+server.registerTool('get_handoff_status', {
+  description:
+    'Non-blocking poll for the current state of a handoff session. Use this ' +
+    'when you want to check whether the human has connected yet (state moves ' +
+    'from `awaiting_viewer` → `streaming`), or whether they finished while ' +
+    'you were doing something else. Cheap to call — does not consume the ' +
+    'session like wait_for_human_handback does, so safe in a loop.\n\n' +
+    'States:\n' +
+    '  awaiting_viewer — URL minted, nobody has opened it yet\n' +
+    '  streaming        — viewer connected, mirror active\n' +
+    '  paused           — viewer left briefly (encoder stopped after 5s grace)\n' +
+    '  complete         — human clicked "return control to agent" (TERMINAL)\n' +
+    '  failed           — CDP/encoder/relay died (TERMINAL)\n' +
+    '  cancelled        — agent or timeout aborted (TERMINAL)',
+  inputSchema: {
+    sessionId: z.string().describe('Session id returned by open_browser_handoff_link'),
+  },
+}, async ({ sessionId }) => {
+  const live = sessions.get(sessionId);
+  if (!live) return err(`session ${sessionId} not found`);
+  return ok({
+    sessionId,
+    state: live.session.state,
+    outcome: live.session.outcome,
+    viewerCount: live.session.viewerCount,
+    prompt: live.prompt,
+    createdAt: live.createdAt,
+  });
+});
+
+server.registerTool('cancel_handoff_link', {
+  description:
+    'Abort an in-flight handoff session — the agent decided it no longer ' +
+    'needs help (got the answer elsewhere, wants to retry with a different ' +
+    'prompt, user cancelled out-of-band). Transitions the session to ' +
+    '`cancelled`, tears down the publisher, and frees the viewer URL. ' +
+    'Idempotent on already-terminal sessions.',
+  inputSchema: {
+    sessionId: z.string().describe('Session id to cancel'),
+    reason: z.string().optional().describe('Optional human-readable reason — recorded in the event log.'),
+  },
+}, async ({ sessionId, reason }) => {
+  const live = sessions.get(sessionId);
+  if (!live) return err(`session ${sessionId} not found`);
+  await live.session.cancel(reason);
+  return ok({
+    sessionId,
+    state: live.session.state,
+    outcome: live.session.outcome,
   });
 });
 

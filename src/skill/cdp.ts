@@ -120,6 +120,11 @@ export class CdpSession extends EventEmitter {
         nativeVirtualKeyCode: vkc,
         modifiers: modBits,
       });
+    } else if (type === 'paste') {
+      // CDP Input.insertText commits the whole string at once (IME-safe) —
+      // much faster than dispatching each char as a key event, and works
+      // correctly in <input> / <textarea> / contenteditable.
+      await this.cmd('Input.insertText', { text: msg.text });
     } else if (type === 'navigate') {
       await this.cmd('Page.navigate', { url: msg.url });
     } else if (type === 'history_back') {
@@ -131,11 +136,109 @@ export class CdpSession extends EventEmitter {
     }
   }
 
+  /**
+   * Install a DOM focus listener in an isolated world. Fires our binding
+   * with `{ isSensitive, fieldType, iframeSrc? }` whenever focus enters a
+   * password / autocomplete-flagged input, or crosses into a cross-origin
+   * iframe (which we can't observe directly, so we use a conservative
+   * default + a payment-provider allowlist).
+   *
+   * Caller subscribes to `Runtime.bindingCalled` events with `name === '__phFocus'`
+   * and parses the JSON payload.
+   */
+  async installFocusObserver(): Promise<void> {
+    await this.cmd('Runtime.enable').catch(() => {});
+    await this.cmd('Page.enable').catch(() => {});
+    // Binding in the isolated 'proxyhuman' world so we don't pollute the
+    // page's main-world `window` and don't conflict with browser-use /
+    // playwright bindings that live in their own isolated worlds.
+    await this.cmd('Runtime.addBinding', { name: '__phFocus' });
+    await this.cmd('Page.addScriptToEvaluateOnNewDocument', {
+      source: FOCUS_OBSERVER_SCRIPT,
+      worldName: 'proxyhuman',
+      runImmediately: true,
+    });
+  }
+
   close(): void {
     this.ws?.close();
     this.ws = null;
   }
 }
+
+// ---------------------------------------------------------------------------
+
+/** Known payment / sensitive iframe providers. When focus crosses into a
+ *  cross-origin iframe, the parent script can't see the iframe's DOM, so we
+ *  fall back to URL matching. UNKNOWN iframes default to sensitive (better
+ *  to over-redact card numbers than to log them). */
+const FOCUS_OBSERVER_SCRIPT = `
+(() => {
+  const KNOWN_PAYMENT = [
+    'js.stripe.com', 'm.stripe.network', 'hooks.stripe.com',
+    'assets.braintreegateway.com', 'paypalobjects.com',
+    'checkout.adyen.com', 'live.adyen.com',
+    'squareup.com', 'recurly.com', 'chargebee.com',
+  ];
+  const KNOWN_BENIGN_IFRAME = [
+    'google.com/recaptcha', 'recaptcha.net', 'hcaptcha.com',
+    'youtube.com/embed', 'youtube-nocookie.com',
+  ];
+
+  function classifyEl(el) {
+    if (!el || el.nodeType !== 1) return { isSensitive: false };
+    const tag = el.tagName;
+    if (tag === 'INPUT') {
+      const t = (el.type || '').toLowerCase();
+      const ac = (el.autocomplete || '').toLowerCase();
+      const isPw = t === 'password';
+      const acSensitive = /\\b(current-password|new-password|one-time-code|cc-number|cc-csc)\\b/.test(ac);
+      const dataPrivate = el.hasAttribute('data-private') || el.hasAttribute('data-redact');
+      return { isSensitive: isPw || acSensitive || dataPrivate, fieldType: t };
+    }
+    if (tag === 'IFRAME') {
+      const src = el.src || '';
+      if (KNOWN_BENIGN_IFRAME.some((d) => src.includes(d))) {
+        return { isSensitive: false, fieldType: 'iframe', iframeSrc: src };
+      }
+      const isPayment = KNOWN_PAYMENT.some((d) => src.includes(d));
+      // Unknown iframe → conservative: treat as sensitive. False positives
+      // (e.g., embedded analytics) over-redact, which is the safe failure mode.
+      return { isSensitive: true, fieldType: 'iframe', iframeSrc: src, payment: isPayment };
+    }
+    if (el.isContentEditable) return { isSensitive: false, fieldType: 'contenteditable' };
+    return { isSensitive: false };
+  }
+
+  let lastSerialized = null;
+  function emit(info) {
+    const s = JSON.stringify(info);
+    if (s === lastSerialized) return;
+    lastSerialized = s;
+    try { window.__phFocus(s); } catch (_) {}
+  }
+
+  document.addEventListener('focusin', (e) => emit(classifyEl(e.target)), true);
+  // focusout fires before the next focusin; checking activeElement on the
+  // next tick lets us detect "focus moved into an iframe" (in which case
+  // activeElement === the iframe element in the parent doc).
+  document.addEventListener('focusout', () => {
+    queueMicrotask(() => {
+      const next = document.activeElement;
+      if (next && next.tagName === 'IFRAME') emit(classifyEl(next));
+      else if (!next || next === document.body) emit({ isSensitive: false });
+    });
+  }, true);
+  // Window blur fires when focus leaves the document (incl. into iframe in
+  // some scenarios) — same handling.
+  window.addEventListener('blur', () => {
+    queueMicrotask(() => {
+      const next = document.activeElement;
+      if (next && next.tagName === 'IFRAME') emit(classifyEl(next));
+    });
+  });
+})();
+`;
 
 async function probeVisibility(wsUrl: string): Promise<'visible' | 'hidden' | 'prerender' | null> {
   return new Promise((resolve) => {

@@ -1,11 +1,20 @@
 import { EventEmitter } from 'node:events';
 import { WebSocket } from 'ws';
-import type { SessionReady } from '../protocol.js';
+import type { SessionReady, PublisherInfo, TargetInfo } from '@proxyhuman/protocol';
 
 export interface RelayHandshake {
   sessionId: string;
   whipUrl: string;
   viewerUrl: string;
+}
+
+export interface ConnectArgs {
+  /** Free-text shown to the human in the dashboard. */
+  prompt?: string | null;
+  /** Self-reported publisher identity (persisted on the session). */
+  publisher?: PublisherInfo;
+  /** Target browser info captured at attach time. */
+  target?: TargetInfo;
 }
 
 export class RelayConnection extends EventEmitter {
@@ -20,13 +29,19 @@ export class RelayConnection extends EventEmitter {
     this.apiKey = apiKey;
   }
 
-  connect(): Promise<RelayHandshake> {
+  connect(args: ConnectArgs = {}): Promise<RelayHandshake> {
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(this.url);
       this.ws = ws;
 
       ws.on('open', () => {
-        ws.send(JSON.stringify({ type: 'skill_hello', apiKey: this.apiKey }));
+        ws.send(JSON.stringify({
+          type: 'new_session',
+          apiKey: this.apiKey,
+          prompt: args.prompt ?? null,
+          publisher: args.publisher,
+          target: args.target,
+        }));
       });
 
       ws.on('error', reject);

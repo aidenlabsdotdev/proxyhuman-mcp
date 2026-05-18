@@ -1,6 +1,6 @@
 {
   "name": "@proxyhuman/mcp",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "ProxyHuman MCP server — ask a human for help with a browser-based task (sign-in, captcha, OTP, payment, subjective choices). Includes the proxyhuman CLI for signup + config.",
   "type": "module",
   "bin": {
@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@proxyhuman/protocol": "^0.2.0",
     "ws": "^8.18.0",
     "zod": "^3.25.76"
   },
