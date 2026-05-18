@@ -5,9 +5,10 @@ for help with a browser-based task (signing in, solving a captcha, completing
 2FA, reading an OTP from email/SMS, entering payment info, picking a
 subjective option) and get back a structured log of what the human did.
 
-Pairs with [`@proxyhuman/skills`](https://www.npmjs.com/package/@proxyhuman/skills)
-(via [`npx skills`](https://www.npmjs.com/package/skills)), which provides the
-`SKILL.md` that tells the agent *when* to reach for this MCP.
+Pairs with the `proxyhuman` Agent Skill at
+[`aidenlabsdotdev/skills`](https://github.com/aidenlabsdotdev/skills),
+installed via [`npx skills add aidenlabsdotdev/skills --skill proxyhuman --agent <harness>`](https://www.npmjs.com/package/skills) —
+the skill is the `SKILL.md` that tells the agent *when* to reach for this MCP.
 
 ## Install
 
