@@ -75,8 +75,6 @@ local Chrome and a local ffmpeg). Everything else is hosted on Cloudflare.
 
 ## Source
 
-This package is mirrored from
-[`aidenlabsdotdev/agent-remote-hands`](https://github.com/aidenlabsdotdev/agent-remote-hands)
-(monorepo) to the public-facing
-[`aidenlabsdotdev/proxyhuman-mcp`](https://github.com/aidenlabsdotdev/proxyhuman-mcp)
-repo, which is what npm publishes from.
+Developed by [Aiden Labs](https://aidenlabs.dev). This repo
+([`aidenlabsdotdev/proxyhuman-mcp`](https://github.com/aidenlabsdotdev/proxyhuman-mcp))
+is what npm publishes from — issues and PRs welcome here.
