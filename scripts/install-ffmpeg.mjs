@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 // Postinstall: fetch a WHIP-capable ffmpeg 8.1 static binary for the current
-// platform and drop it into packages/browser-skill/bin/ffmpeg. Idempotent —
-// re-runs check the existing binary and skip if it already has WHIP.
+// platform and drop it into <package>/bin/ffmpeg. Idempotent — re-runs check
+// the existing binary and skip if it already has WHIP.
 //
 // Sources:
-//   linux x64 / arm64  → BtbN/FFmpeg-Builds GitHub releases (n8.1 GPL static)
+//   linux x64 / arm64   → BtbN/FFmpeg-Builds GitHub releases (n8.1 GPL static)
 //   windows x64 / arm64 → BtbN
-//   macOS              → evermeet.cx (BtbN doesn't build for darwin)
+//   macOS x64 / arm64   → ffmpeg.martin-riedl.de (BtbN doesn't build darwin;
+//                         evermeet/Homebrew/OSXExperts macOS builds OMIT the
+//                         WHIP muxer; martin-riedl builds with openssl + WHIP)
 import { existsSync, mkdirSync, statSync, chmodSync, rmSync, createWriteStream } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -23,27 +25,17 @@ const BIN = resolve(BIN_DIR, process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmp
 // commit hashes instead. We accept the rolling-forward risk in exchange for
 // stable asset names.
 const BTBN = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest';
-// Our own mirror of evermeet's universal-darwin static build. evermeet is the
-// only WHIP-capable static macOS source but their server is single-homed and
-// frequently slow (often <60 KB/s). GH Releases is on Fastly so users hit a
-// fast CDN edge instead. Refresh this when we bump the bundled ffmpeg version.
-const PH_MIRROR = 'https://github.com/aidenlabsdotdev/proxyhuman-mcp/releases/download/ffmpeg-v8.1';
 
 const SOURCES = {
   'linux-x64':    `${BTBN}/ffmpeg-n8.1-latest-linux64-gpl-8.1.tar.xz`,
   'linux-arm64':  `${BTBN}/ffmpeg-n8.1-latest-linuxarm64-gpl-8.1.tar.xz`,
   'win32-x64':    `${BTBN}/ffmpeg-n8.1-latest-win64-gpl-8.1.zip`,
   'win32-arm64':  `${BTBN}/ffmpeg-n8.1-latest-winarm64-gpl-8.1.zip`,
-  // Universal binary works on both x64 and arm64 macs (Apple Silicon + Intel).
-  'darwin-x64':   `${PH_MIRROR}/ffmpeg-darwin-universal.zip`,
-  'darwin-arm64': `${PH_MIRROR}/ffmpeg-darwin-universal.zip`,
-};
-
-// If the mirror is ever unreachable, fall back to evermeet directly. Slow but
-// authoritative.
-const FALLBACKS = {
-  'darwin-x64':   'https://evermeet.cx/ffmpeg/getrelease/zip',
-  'darwin-arm64': 'https://evermeet.cx/ffmpeg/getrelease/zip',
+  // Version-pinned to ffmpeg 8.1.1; bump these URLs when we ship a new
+  // upstream ffmpeg. The static build links only against Apple system
+  // frameworks and is ad-hoc signed (no codesign step needed).
+  'darwin-x64':   'https://ffmpeg.martin-riedl.de/download/macos/amd64/1778768838_8.1.1/ffmpeg.zip',
+  'darwin-arm64': 'https://ffmpeg.martin-riedl.de/download/macos/arm64/1778761665_8.1.1/ffmpeg.zip',
 };
 
 function hasWhip(binPath) {
@@ -64,29 +56,20 @@ if (!url) {
 }
 
 mkdirSync(BIN_DIR, { recursive: true });
-// evermeet's macOS URL (`/getrelease/zip`) has no `.zip` suffix, so detect
-// the archive type by platform key rather than by URL extension.
+// All our current sources serve genuine .zip or .tar.xz files (no extension-
+// less redirects like evermeet's `/getrelease/zip`), but we still detect by
+// platform to stay robust against future sources that use path-style URLs.
 const isZip = key.startsWith('darwin') || key.startsWith('win32') || url.endsWith('.zip');
 const tmpExt = isZip ? 'zip' : 'tar.xz';
 const tmp = resolve(BIN_DIR, `_dl.${tmpExt}`);
 
-async function tryDownload(u) {
-  console.log(`[ffmpeg] downloading ${u}`);
-  const r = await fetch(u, { redirect: 'follow' });
-  if (!r.ok) {
-    console.error(`[ffmpeg] download failed: ${r.status} ${r.statusText}`);
-    return null;
-  }
-  await pipeline(Readable.fromWeb(r.body), createWriteStream(tmp));
-  return true;
+console.log(`[ffmpeg] downloading ${url}`);
+const res = await fetch(url, { redirect: 'follow' });
+if (!res.ok) {
+  console.error(`[ffmpeg] download failed: ${res.status} ${res.statusText}`);
+  process.exit(0);
 }
-
-let ok = await tryDownload(url).catch((e) => { console.error(`[ffmpeg] ${e}`); return null; });
-if (!ok && FALLBACKS[key]) {
-  console.log('[ffmpeg] primary mirror failed, trying fallback…');
-  ok = await tryDownload(FALLBACKS[key]).catch((e) => { console.error(`[ffmpeg] fallback ${e}`); return null; });
-}
-if (!ok) process.exit(0);
+await pipeline(Readable.fromWeb(res.body), createWriteStream(tmp));
 console.log(`[ffmpeg] downloaded ${(statSync(tmp).size / 1024 / 1024).toFixed(1)} MB`);
 
 // Extract just the ffmpeg binary. We use system tar/unzip — both are
@@ -99,7 +82,8 @@ if (tmpExt === 'tar.xz') {
     { stdio: 'inherit' },
   );
 } else {
-  // -j flattens directories; pick the ffmpeg(.exe) and the evermeet build has it at root
+  // -j flattens directories; martin-riedl + BtbN-win zips both have ffmpeg
+  // either at root or one dir deep, so match both.
   r = spawnSync('unzip', ['-jo', tmp, '*/ffmpeg*', 'ffmpeg*', '-d', BIN_DIR], { stdio: 'inherit' });
 }
 rmSync(tmp);
