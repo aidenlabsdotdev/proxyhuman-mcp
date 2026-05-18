@@ -52,7 +52,10 @@ if (!url) {
 }
 
 mkdirSync(BIN_DIR, { recursive: true });
-const tmpExt = url.endsWith('.zip') ? 'zip' : 'tar.xz';
+// evermeet's macOS URL (`/getrelease/zip`) has no `.zip` suffix, so detect
+// the archive type by platform key rather than by URL extension.
+const isZip = key.startsWith('darwin') || key.startsWith('win32') || url.endsWith('.zip');
+const tmpExt = isZip ? 'zip' : 'tar.xz';
 const tmp = resolve(BIN_DIR, `_dl.${tmpExt}`);
 
 console.log(`[ffmpeg] downloading ${url}`);
