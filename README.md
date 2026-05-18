@@ -24,12 +24,18 @@ proxyhuman verify <code-from-email>
 # 3. Register the MCP in your harness:
 claude mcp add proxyhuman -- proxyhuman-mcp
 #   or for Hermes / Codex / Cursor / etc., the harness-specific equivalent
+
+# 4. Install the proxyhuman Agent Skill — this is the SKILL.md that tells
+#    the agent *when* to reach for the MCP (sign-ins, captchas, OTPs, …).
+#    Without it the tools are registered but the agent won't know to use them.
+npx skills add aidenlabsdotdev/skills --skill proxyhuman --agent claude-code
+#   --agent hermes-agent | codex | cursor | cline | … (20+ supported)
 ```
 
 The `npm i -g` postinstall fetches a WHIP-capable ffmpeg 8.1 (BtbN on Linux/
-Windows, evermeet.cx on macOS) and stages it in the package's `bin/`. ~134 MB
-one-time download, used by the MCP to publish the browser's screencast to
-Cloudflare Realtime SFU.
+Windows, martin-riedl.de on macOS) and stages it in the package's `bin/`.
+~30–200 MB one-time download per platform, used by the MCP to publish the
+browser's screencast to Cloudflare Realtime SFU.
 
 ## Two bins
 
