@@ -37,6 +37,7 @@ const DEFAULT_KEY = resolveApiKey();
 interface Live {
   session: BrowserSession;
   apiUrl: string;
+  apiKey: string;
   prompt: string | null;
   createdAt: number;
   /** Resolves when the session reaches any terminal state. */
@@ -45,8 +46,10 @@ interface Live {
 
 const sessions = new Map<string, Live>();
 
-async function fetchActions(apiUrl: string, sessionId: string) {
-  const res = await fetch(`${apiUrl.replace(/\/$/, '')}/sessions/${sessionId}/actions`);
+async function fetchActions(apiUrl: string, apiKey: string, sessionId: string) {
+  const res = await fetch(`${apiUrl.replace(/\/$/, '')}/sessions/${sessionId}/actions`, {
+    headers: { authorization: `Bearer ${apiKey}` },
+  });
   if (!res.ok) return { currentUrl: '', actions: [] as unknown[] };
   return res.json() as Promise<{ currentUrl: string; actions: unknown[] }>;
 }
@@ -103,7 +106,7 @@ server.registerTool('open_browser_handoff_link', {
   });
 
   sessions.set(session.sessionId, {
-    session, apiUrl, prompt: prompt ?? null, createdAt: Date.now(), terminal,
+    session, apiUrl, apiKey, prompt: prompt ?? null, createdAt: Date.now(), terminal,
   });
 
   return ok({
@@ -139,7 +142,7 @@ server.registerTool('wait_for_human_handback', {
     new Promise<void>((resolve) => setTimeout(() => { timedOut = true; resolve(); }, timeoutMs)),
   ]);
 
-  const log = await fetchActions(live.apiUrl, sessionId);
+  const log = await fetchActions(live.apiUrl, live.apiKey, sessionId);
   return ok({
     sessionId,
     state: live.session.state,
