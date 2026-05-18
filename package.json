@@ -1,28 +1,31 @@
 {
   "name": "@proxyhuman/mcp",
   "version": "0.1.0",
-  "description": "ProxyHuman MCP server \u2014 ask a human for help with a browser-based task (sign-in, captcha, OTP, payment, subjective choices). Includes the proxyhuman CLI for signup + config.",
+  "description": "ProxyHuman MCP server — ask a human for help with a browser-based task (sign-in, captcha, OTP, payment, subjective choices). Includes the proxyhuman CLI for signup + config.",
   "type": "module",
   "bin": {
     "proxyhuman-mcp": "./dist/index.js",
     "proxyhuman": "./dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "scripts",
+    "bin/.gitkeep"
   ],
   "scripts": {
     "build": "tsup src/index.ts src/cli.ts --format esm --dts",
     "dev": "tsup src/index.ts src/cli.ts --format esm --dts --watch",
-    "start": "tsx src/index.ts"
+    "start": "tsx src/index.ts",
+    "postinstall": "node scripts/install-ffmpeg.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@proxyhuman/browser-skill": "^0.1.0",
-    "@proxyhuman/shared": "^0.1.0",
+    "ws": "^8.18.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@types/ws": "^8.5.14",
     "tsup": "^8.5.0",
     "tsx": "^4.19.2",
     "typescript": "~6.0.2"

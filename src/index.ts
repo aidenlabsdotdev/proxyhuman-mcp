@@ -28,7 +28,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { connectBrowser, type BrowserSession } from '@proxyhuman/browser-skill';
+import { connectBrowser, type BrowserSession } from './skill/index.js';
 import { resolveApiKey, resolveApiUrl, resolveCdpTarget, CONFIG_PATH } from './config.js';
 
 const DEFAULT_API = resolveApiUrl();
