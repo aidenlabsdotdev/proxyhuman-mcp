@@ -1,6 +1,6 @@
 {
   "name": "@proxyhuman/mcp",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "ProxyHuman MCP server — ask a human for help with a browser-based task (sign-in, captcha, OTP, payment, subjective choices). Includes the proxyhuman CLI for signup + config.",
   "type": "module",
   "bin": {
