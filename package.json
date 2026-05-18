@@ -1,0 +1,47 @@
+{
+  "name": "@proxyhuman/mcp",
+  "version": "0.1.0",
+  "description": "ProxyHuman MCP server \u2014 ask a human for help with a browser-based task (sign-in, captcha, OTP, payment, subjective choices). Includes the proxyhuman CLI for signup + config.",
+  "type": "module",
+  "bin": {
+    "proxyhuman-mcp": "./dist/index.js",
+    "proxyhuman": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts src/cli.ts --format esm --dts",
+    "dev": "tsup src/index.ts src/cli.ts --format esm --dts --watch",
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@proxyhuman/browser-skill": "^0.1.0",
+    "@proxyhuman/shared": "^0.1.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsup": "^8.5.0",
+    "tsx": "^4.19.2",
+    "typescript": "~6.0.2"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "human-in-the-loop",
+    "browser-automation",
+    "proxyhuman",
+    "agent-tool"
+  ],
+  "license": "MIT",
+  "homepage": "https://proxyhuman.ai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aidenlabsdotdev/proxyhuman-mcp"
+  }
+}
