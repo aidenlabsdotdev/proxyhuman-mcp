@@ -23,13 +23,25 @@ const BIN = resolve(BIN_DIR, process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmp
 // commit hashes instead. We accept the rolling-forward risk in exchange for
 // stable asset names.
 const BTBN = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest';
+// Our own mirror of evermeet's universal-darwin static build. evermeet is the
+// only WHIP-capable static macOS source but their server is single-homed and
+// frequently slow (often <60 KB/s). GH Releases is on Fastly so users hit a
+// fast CDN edge instead. Refresh this when we bump the bundled ffmpeg version.
+const PH_MIRROR = 'https://github.com/aidenlabsdotdev/proxyhuman-mcp/releases/download/ffmpeg-v8.1';
 
 const SOURCES = {
   'linux-x64':    `${BTBN}/ffmpeg-n8.1-latest-linux64-gpl-8.1.tar.xz`,
   'linux-arm64':  `${BTBN}/ffmpeg-n8.1-latest-linuxarm64-gpl-8.1.tar.xz`,
   'win32-x64':    `${BTBN}/ffmpeg-n8.1-latest-win64-gpl-8.1.zip`,
   'win32-arm64':  `${BTBN}/ffmpeg-n8.1-latest-winarm64-gpl-8.1.zip`,
-  // evermeet auto-redirects to the latest static darwin universal binary
+  // Universal binary works on both x64 and arm64 macs (Apple Silicon + Intel).
+  'darwin-x64':   `${PH_MIRROR}/ffmpeg-darwin-universal.zip`,
+  'darwin-arm64': `${PH_MIRROR}/ffmpeg-darwin-universal.zip`,
+};
+
+// If the mirror is ever unreachable, fall back to evermeet directly. Slow but
+// authoritative.
+const FALLBACKS = {
   'darwin-x64':   'https://evermeet.cx/ffmpeg/getrelease/zip',
   'darwin-arm64': 'https://evermeet.cx/ffmpeg/getrelease/zip',
 };
@@ -58,13 +70,23 @@ const isZip = key.startsWith('darwin') || key.startsWith('win32') || url.endsWit
 const tmpExt = isZip ? 'zip' : 'tar.xz';
 const tmp = resolve(BIN_DIR, `_dl.${tmpExt}`);
 
-console.log(`[ffmpeg] downloading ${url}`);
-const res = await fetch(url, { redirect: 'follow' });
-if (!res.ok) {
-  console.error(`[ffmpeg] download failed: ${res.status} ${res.statusText}`);
-  process.exit(0);
+async function tryDownload(u) {
+  console.log(`[ffmpeg] downloading ${u}`);
+  const r = await fetch(u, { redirect: 'follow' });
+  if (!r.ok) {
+    console.error(`[ffmpeg] download failed: ${r.status} ${r.statusText}`);
+    return null;
+  }
+  await pipeline(Readable.fromWeb(r.body), createWriteStream(tmp));
+  return true;
 }
-await pipeline(Readable.fromWeb(res.body), createWriteStream(tmp));
+
+let ok = await tryDownload(url).catch((e) => { console.error(`[ffmpeg] ${e}`); return null; });
+if (!ok && FALLBACKS[key]) {
+  console.log('[ffmpeg] primary mirror failed, trying fallback…');
+  ok = await tryDownload(FALLBACKS[key]).catch((e) => { console.error(`[ffmpeg] fallback ${e}`); return null; });
+}
+if (!ok) process.exit(0);
 console.log(`[ffmpeg] downloaded ${(statSync(tmp).size / 1024 / 1024).toFixed(1)} MB`);
 
 // Extract just the ffmpeg binary. We use system tar/unzip — both are
