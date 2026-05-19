@@ -78,10 +78,10 @@ export class FfmpegPublisher extends EventEmitter {
       // 1 MB UDP send buffer — default is too small for CF SFU's edge; we hit
       // EAGAIN inside libavformat when bursting keyframes otherwise.
       '-ts_buffer_size', '1048576',
-      // ffmpeg's whip muxer sends this as the literal Authorization header
-      // value; api-worker expects the same `Bearer <key>` shape used
-      // everywhere else (resolveUserId, /ws/skill upgrade, /sessions/*).
-      '-authorization', `Bearer ${this.apiKey}`,
+      // ffmpeg's whip muxer prepends "Bearer " itself when building the
+      // Authorization header — pass the raw key, not "Bearer <key>", or
+      // the worker receives "Authorization: Bearer Bearer <key>" and 401s.
+      '-authorization', this.apiKey,
       this.whipUrl,
     ];
 
