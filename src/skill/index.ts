@@ -7,9 +7,6 @@ import type { ViewerJoined, ViewerLeft, ViewerCommand } from '@proxyhuman/protoc
 
 const DEFAULT_API = 'https://api.proxyhuman.ai';
 
-/** Idle timeout in `awaiting_viewer` before auto-cancel. */
-const AWAITING_VIEWER_TIMEOUT_MS = 30 * 60 * 1000; // 30 min
-
 /** Publisher self-description sent on new_session. Loaded from package.json. */
 const PUBLISHER_NAME = '@proxyhuman/mcp';
 // PUBLISHER_VERSION is injected by the bundler / read at runtime from package.json.
@@ -210,13 +207,12 @@ export async function connectBrowser(opts: ConnectOptions): Promise<BrowserSessi
     }
   };
 
-  // Auto-cancel if no viewer ever connects.
-  const idleTimer = setTimeout(() => {
-    if (state === 'awaiting_viewer') {
-      transition('cancelled', { type: 'timeout' });
-      void teardown();
-    }
-  }, AWAITING_VIEWER_TIMEOUT_MS);
+  // Request-timeout enforcement lives entirely server-side now (see the
+  // DO alarm in api-worker). The server sends `cancel_handoff` when its
+  // per-tier timeout elapses; we handle that below same as any other
+  // cancel. Previously this MCP had its own hardcoded 30-min idle timer
+  // that fired before the server's per-tier limit for Pro users (2h),
+  // truncating sessions they were paying for.
 
   // CDP target died — fail hard.
   cdp.on('close', () => {
@@ -275,7 +271,6 @@ export async function connectBrowser(opts: ConnectOptions): Promise<BrowserSessi
   });
 
   async function teardown() {
-    clearTimeout(idleTimer);
     if (stopTimer) { clearTimeout(stopTimer); stopTimer = null; }
     await stopStream().catch(() => {});
     cdp.close();
