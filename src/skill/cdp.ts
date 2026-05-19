@@ -15,9 +15,16 @@ export class CdpSession extends EventEmitter {
   /** Connect to a CDP target. If `tabMatch` is provided, it is matched as a
    *  case-insensitive substring against each tab's URL and title and the first
    *  match wins. Otherwise we probe each page target's `document.visibilityState`
-   *  and pick the one Chrome considers visible (the user's active tab). */
-  async connect(cdpHttpUrl: string, tabMatch?: string): Promise<void> {
-    const base = cdpHttpUrl.replace(/\/+$/, '');
+   *  and pick the one Chrome considers visible (the user's active tab).
+   *
+   *  `cdpUrl` accepts any of the URL shapes a CDP-aware driver might hand you:
+   *    http://host:port                              ← discovery base
+   *    http://host:port/                             ← trailing slash
+   *    ws://host:port/devtools/browser/<uuid>        ← browser-level WS
+   *    wss://host:port/devtools/browser/<uuid>       ← TLS variant
+   *  All normalize to `http://host:port` (or https) for the `/json` lookup. */
+  async connect(cdpUrl: string, tabMatch?: string): Promise<void> {
+    const base = this.normalizeHttpBase(cdpUrl);
     const res = await fetch(`${base}/json`);
     const targets = await res.json() as CdpTarget[];
     const pages = targets.filter((t) => (t as any).type === 'page');
@@ -42,6 +49,22 @@ export class CdpSession extends EventEmitter {
     if (!page) throw new Error(`No page target at ${base}`);
     process.stderr.write(`[proxyhuman] attached to tab: ${(page as any).title ?? ''} (${(page as any).url ?? '?'})\n`);
     await this.connectToTarget(page.webSocketDebuggerUrl);
+  }
+
+  /** Normalize a CDP URL to its `http(s)://host:port` discovery base. */
+  private normalizeHttpBase(input: string): string {
+    // Pre-pend a scheme if missing — `new URL('localhost:9222')` otherwise
+    // parses `localhost:` as the scheme and we end up with a bogus host.
+    const withScheme = /^[a-z]+:\/\//i.test(input) ? input : `http://${input}`;
+    try {
+      const u = new URL(withScheme);
+      const proto = u.protocol === 'ws:' ? 'http:'
+                  : u.protocol === 'wss:' ? 'https:'
+                  : u.protocol;
+      return `${proto}//${u.host}`;
+    } catch {
+      return input.replace(/\/+$/, '');
+    }
   }
 
   async connectToTarget(wsUrl: string): Promise<void> {
