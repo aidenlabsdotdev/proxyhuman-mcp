@@ -31,7 +31,14 @@ export class RelayConnection extends EventEmitter {
 
   connect(args: ConnectArgs = {}): Promise<RelayHandshake> {
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(this.url);
+      // Pass the API key on the WS handshake itself. The api-worker
+      // requires this at upgrade time so anonymous bots can't open
+      // /ws/skill and burn DO instances. We still send the apiKey in
+      // the first new_session frame too (servers >=2026-05-19 verify
+      // both; older servers fall through to the frame-only path).
+      const ws = new WebSocket(this.url, {
+        headers: { authorization: `Bearer ${this.apiKey}` },
+      });
       this.ws = ws;
 
       ws.on('open', () => {
