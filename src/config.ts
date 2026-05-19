@@ -8,7 +8,6 @@ export interface PersistedConfig {
   api_key?: string;
   agent_id?: string;
   email?: string;
-  api_url?: string;
 }
 
 export const CONFIG_PATH = resolve(homedir(), '.proxyhuman', 'config.json');
@@ -33,8 +32,11 @@ export function resolveApiKey(): string | undefined {
   return process.env.PROXYHUMAN_API_KEY || loadConfig().api_key;
 }
 
+/** The base URL the package ships with. Only PROXYHUMAN_API overrides
+ *  (staging / self-hosted relay). Not stored in the user config — that
+ *  would just bit-rot. */
 export function resolveApiUrl(): string {
-  return process.env.PROXYHUMAN_API ?? loadConfig().api_url ?? 'https://api.proxyhuman.ai';
+  return process.env.PROXYHUMAN_API ?? 'https://app.proxyhuman.ai';
 }
 
 /** Hermes (the agent framework most users come from) writes the canonical

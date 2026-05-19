@@ -42,7 +42,7 @@ async function signUp(): Promise<void> {
   const email = getOpt('--email') ?? getOpt('-e');
   if (!email) die('usage: proxyhuman sign-up --email <you@example.com> [--username <name>]');
   const username = getOpt('--username') ?? getOpt('-u');
-  const body = (await api('/agent/sign-up', {
+  const body = (await api('/api/v1/sign-up', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ human_email: email, ...(username ? { username } : {}) }),
@@ -51,29 +51,21 @@ async function signUp(): Promise<void> {
   saveConfig({ api_key: body.api_key, agent_id: body.agent_id, email: body.email });
   process.stdout.write(`Signed up.\n  api_key:  ${body.api_key}\n  agent_id: ${body.agent_id}\n  email:    ${body.email}\n`);
   if (body.verification_pending) {
-    process.stdout.write(`\nA verification code was sent to ${body.email}. Run:\n  proxyhuman verify <code>\n`);
-  } else {
-    process.stdout.write(`\nVerified. Saved to ${CONFIG_PATH}.\n`);
+    process.stdout.write(`\nOpen the welcome email at ${body.email} to verify (one click).\n`);
   }
+  process.stdout.write(`\nSaved to ${CONFIG_PATH}.\n`);
 }
 
+// `verify` is now a no-op informational command — verification happens
+// when the user clicks the magic-link email sent at sign-up time.
 async function verify(): Promise<void> {
-  const code = args[1];
-  if (!code) die('usage: proxyhuman verify <otp-code>');
-  const key = resolveApiKey();
-  if (!key) die('no api_key found — run sign-up first');
-  const body = (await api('/agent/verify', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-    body: JSON.stringify({ otp_code: code }),
-  })) as { verified: boolean };
-  process.stdout.write(body.verified ? 'Verified.\n' : 'Verification rejected.\n');
+  process.stdout.write('Verification happens automatically when you open the welcome email sent at sign-up. If you missed it, sign in at https://app.proxyhuman.ai/ for a fresh link.\n');
 }
 
 async function me(): Promise<void> {
   const key = resolveApiKey();
   if (!key) die('no api_key found — run sign-up first');
-  const body = await api('/agent/me', { headers: { authorization: `Bearer ${key}` } });
+  const body = await api('/api/v1/me', { headers: { authorization: `Bearer ${key}` } });
   process.stdout.write(JSON.stringify(body, null, 2) + '\n');
 }
 

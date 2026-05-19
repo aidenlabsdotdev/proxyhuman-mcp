@@ -47,7 +47,7 @@ interface Live {
 const sessions = new Map<string, Live>();
 
 async function fetchActions(apiUrl: string, apiKey: string, sessionId: string) {
-  const res = await fetch(`${apiUrl.replace(/\/$/, '')}/sessions/${sessionId}/actions`, {
+  const res = await fetch(`${apiUrl.replace(/\/$/, '')}/api/v1/sessions/${sessionId}/actions`, {
     headers: { authorization: `Bearer ${apiKey}` },
   });
   if (!res.ok) return { currentUrl: '', actions: [] as unknown[] };
@@ -80,7 +80,7 @@ server.registerTool('open_browser_handoff_link', {
     'delivered the URL should you call `wait_for_human_handback`.',
   inputSchema: {
     cdp_target: z.string().optional().describe('Chrome CDP HTTP endpoint of the browser the human should take over (e.g. http://localhost:9222). Pass this explicitly when your agent is operating against a known browser session — it scopes the hand-off precisely. If omitted, the server tries common defaults.'),
-    api_url: z.string().optional().describe('ProxyHuman relay/API base URL (default https://api.proxyhuman.ai)'),
+    api_url: z.string().optional().describe('ProxyHuman relay/API base URL (default https://app.proxyhuman.ai)'),
     api_key: z.string().optional().describe('ProxyHuman API key (default "dev-key")'),
     prompt: z.string().optional().describe('Optional instruction recorded with the session — purely informational.'),
   },
