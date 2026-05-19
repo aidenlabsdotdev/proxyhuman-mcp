@@ -103,10 +103,16 @@ export class FfmpegPublisher extends EventEmitter {
     this.proc.on('exit', (code) => {
       process.stderr.write(`[ffmpeg-publisher] exited with code ${code}\n`);
       this.cleanup();
+      // Re-emit on the FfmpegPublisher itself so the skill can detect a
+      // crash and transition the session to failed:encoder_crash. The
+      // skill's listener is a no-op when the exit was intentional (it
+      // gates on session state) so it's safe to fire here unconditionally.
+      this.emit('exit', code);
     });
     this.proc.on('error', (err) => {
       process.stderr.write(`[ffmpeg-publisher] spawn error: ${err}\n`);
       this.cleanup();
+      this.emit('error', err);
     });
   }
 
