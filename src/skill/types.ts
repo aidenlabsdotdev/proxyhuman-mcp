@@ -3,8 +3,6 @@ export interface ConnectOptions {
   apiKey: string;
   /** Chrome DevTools Protocol HTTP endpoint, e.g. http://localhost:9222 */
   cdpTarget: string;
-  /** API base URL, defaults to https://api.proxyhuman.ai */
-  apiUrl?: string;
   /** Path to ffmpeg binary, defaults to ../bin/ffmpeg or $FFMPEG_PATH */
   ffmpegPath?: string;
   /** Free-text shown to the human in the dashboard. */

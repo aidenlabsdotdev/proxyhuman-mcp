@@ -5,7 +5,7 @@ import type { ConnectOptions, BrowserSession, SessionState, SessionOutcome } fro
 import { isTerminalState } from './types.js';
 import type { ViewerJoined, ViewerLeft, ViewerCommand } from '@proxyhuman/protocol';
 
-const DEFAULT_API = 'https://api.proxyhuman.ai';
+const DEFAULT_API = 'https://app.proxyhuman.ai';
 
 /** Publisher self-description sent on new_session. Loaded from package.json. */
 const PUBLISHER_NAME = '@proxyhuman/mcp';

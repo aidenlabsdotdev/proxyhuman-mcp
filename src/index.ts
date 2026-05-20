@@ -80,21 +80,18 @@ server.registerTool('open_browser_handoff_link', {
     'delivered the URL should you call `wait_for_human_handback`.',
   inputSchema: {
     cdp_target: z.string().optional().describe('Chrome CDP HTTP endpoint of the browser the human should take over (e.g. http://localhost:9222). Pass this explicitly when your agent is operating against a known browser session — it scopes the hand-off precisely. If omitted, the server tries common defaults.'),
-    api_url: z.string().optional().describe('ProxyHuman relay/API base URL (default https://app.proxyhuman.ai)'),
-    api_key: z.string().optional().describe('ProxyHuman API key (default "dev-key")'),
     prompt: z.string().optional().describe('Optional instruction recorded with the session — purely informational.'),
   },
-}, async ({ cdp_target, api_url, api_key, prompt }) => {
+}, async ({ cdp_target, prompt }) => {
   const cdpTarget = cdp_target ?? await resolveCdpTarget();
-  const apiUrl = api_url ?? DEFAULT_API;
-  const apiKey = api_key ?? DEFAULT_KEY;
+  const apiKey = DEFAULT_KEY;
   if (!apiKey) {
     return err(`No API key found. Run \`proxyhuman sign-up --email you@example.com\` or set PROXYHUMAN_API_KEY. Config: ${CONFIG_PATH}`);
   }
 
   let session: BrowserSession;
   try {
-    session = await connectBrowser({ apiKey, cdpTarget, apiUrl, prompt: prompt ?? null });
+    session = await connectBrowser({ apiKey, cdpTarget, prompt: prompt ?? null });
   } catch (e) {
     return err(`failed to start session: ${e}`);
   }
@@ -106,7 +103,7 @@ server.registerTool('open_browser_handoff_link', {
   });
 
   sessions.set(session.sessionId, {
-    session, apiUrl, apiKey, prompt: prompt ?? null, createdAt: Date.now(), terminal,
+    session, apiUrl: DEFAULT_API, apiKey, prompt: prompt ?? null, createdAt: Date.now(), terminal,
   });
 
   return ok({
